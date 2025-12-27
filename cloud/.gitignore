@@ -1,0 +1,41 @@
+# Compiled JavaScript files
+functions/lib/
+functions/**/*.js
+functions/**/*.js.map
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Node modules
+node_modules/
+functions/node_modules/
+
+# Firebase cache
+.firebase/
+
+# Firebase config files with secrets
+.env
+.env.local
+functions/.env
+functions/.env.local
+
+# Service account keys
+*-firebase-adminsdk-*.json
+service-account-key.json
+
+# Logs
+*.log
+firebase-debug.log
+firebase-debug.*.log
+ui-debug.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

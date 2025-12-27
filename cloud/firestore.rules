@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Sessions collection
+    match /sessions/{sessionId} {
+      // Allow read for all authenticated users
+      allow read: if true;
+
+      // Allow create for authenticated users
+      allow create: if true;
+
+      // Allow update only if session exists
+      allow update: if exists(/databases/$(database)/documents/sessions/$(sessionId));
+
+      // Allow delete for admin users only (to be implemented)
+      allow delete: if false;
+    }
+
+    // Locations collection
+    match /locations/{locationId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Match history (completed matches)
+    match /match_history/{matchId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if false;
+    }
+  }
+}
