@@ -6,8 +6,8 @@
 #include <BLE2902.h>
 
 // WiFi credentials
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID = "castelli_wifi";
+const char* WIFI_PASSWORD = "zID1M16YZdnZ";
 
 // BLE Server settings
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
