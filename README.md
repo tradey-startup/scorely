@@ -199,3 +199,162 @@ Produzione
 ✅ Conclusione
 Questo sistema: - funziona con o senza hardware dedicato - è robusto in ambienti reali - è pronto per essere prodotto e scalato
 👉 La sessione è il cuore del sistema.
+
+
+RODMAP
+
+🧭 Roadmap di Sviluppo – Sistema di Punteggio Sportivo IoT
+Questa documentazione descrive l’ordine corretto e progressivo per sviluppare l’intero sistema, evitando refactor inutili e garantendo stabilità fin dalle prime fasi.
+👉 Regola base: ogni step deve funzionare da solo prima di passare al successivo.
+
+🔰 STEP 0 – Preparazione ambiente
+Obiettivo
+Avere un ambiente di sviluppo pronto e coerente per tutti i componenti.
+Attività OK
+Creazione repository (monorepo consigliato)
+Setup Broker MQTT (HiveMQ Cloud o Mosquitto)
+Creazione struttura progetto
+/scorely
+ ├── cloud/
+ ├── webapp/
+ └── esp32/
+Output atteso
+Broker MQTT raggiungibile
+Credenziali MQTT funzionanti
+
+🧠 STEP 1 – Core del sistema: Sessione & Stato
+Obiettivo
+Costruire il cuore logico del sistema: la sessione di gioco.
+Attività
+Definizione modello Sessione
+Implementazione topic MQTT principali
+Gestione eventi e snapshot di stato
+Topic MQTT
+session/{sessionId}/event
+session/{sessionId}/state   (retained)
+Regola chiave
+Se chiudi tutti i device, la sessione deve continuare a esistere.
+Output atteso
+Invio evento → aggiornamento stato
+Snapshot sempre coerente
+
+🌐 STEP 2 – Web App minimale (Tabellone universale)
+Obiettivo
+Trasformare qualsiasi browser in un tabellone funzionante.
+Attività
+Setup React (Vite)
+Connessione MQTT over WebSocket
+Visualizzazione punteggio in tempo reale
+Funzionalità minime
+Mostra punteggio
+Bottone Start / End partita
+Log eventi MQTT (debug)
+Output atteso
+Il punteggio cambia in tempo reale
+Ricaricando la pagina lo stato è corretto
+
+🔗 STEP 3 – Pairing base (1 braccialetto)
+Obiettivo
+Associare un solo braccialetto a una sessione.
+Attività
+ESP32: Wi-Fi + MQTT
+Gestione pulsanti + / −
+Implementazione pairing MQTT
+Topic pairing
+pairing/request
+pairing/response/{deviceId}
+Test critico
+Premi + e −
+Ricevi topic
+Premi + → punteggio cambia sul browser
+Output atteso
+Pairing stabile
+Topic salvato in EEPROM / LittleFS
+
+🧩 STEP 4 – Stato persistente & riconnessioni
+Obiettivo
+Garantire robustezza in scenari reali.
+Attività
+Salvataggio stato su Cloud DB
+Pubblicazione snapshot su riconnessione
+Gestione riconnessione ESP32
+Test
+Spegni Wi-Fi
+Ricarica Web App
+Riaccendi ESP32
+Output atteso
+Nessuna perdita di punteggio
+
+👥 STEP 5 – Multi-braccialetto & Team
+Obiettivo
+Gestire partite reali con più giocatori.
+Attività
+Assegnazione team durante pairing
+Gestione più input simultanei
+Protezione da duplicazioni
+Regole
+Un braccialetto = un team
+Eventi idempotenti
+Output atteso
+4 braccialetti funzionano insieme
+
+📱 STEP 6 – UX reale (flow completo)
+Obiettivo
+Riprodurre esattamente l’esperienza dell’utente finale.
+Attività
+Creazione partita
+QR code sessione
+Pairing temporizzato
+Start / End partita
+Test reale
+Tablet / iPad
+4 persone
+Wi-Fi instabile
+Output atteso
+Esperienza fluida e intuitiva
+
+🧾 STEP 7 – Storico partite & location
+Obiettivo
+Persistenza e consultazione dati.
+Attività
+Salvataggio partita a fine match
+Query per location
+Visualizzazione storico
+Output atteso
+Lista partite
+Dettaglio punteggi
+
+🔐 STEP 8 – Sicurezza & ruoli
+Obiettivo
+Prevenire errori e accessi indesiderati.
+Attività
+Ruoli client (display, controller, admin)
+Token sessione
+Limitazione comandi critici
+Output atteso
+Nessun conflitto tra device
+
+🧪 STEP 9 – Testing & hardening
+Obiettivo
+Portare il sistema a livello produzione.
+Attività
+Stress test MQTT
+Simulazione disconnessioni
+Test multi-campo
+Output atteso
+Sistema stabile in uso reale
+
+🚀 STEP 10 – Deploy
+Obiettivo
+Installazione nel centro sportivo.
+Attività
+Configurazione Wi-Fi definitiva
+Documentazione operativa
+Onboarding utenti
+Output finale
+✅ Sistema pronto per partite reali
+
+🏁 Conclusione
+Seguendo questi step: - non riscrivi codice - non crei dipendenze inutili - costruisci un prodotto solido
+👉 Il cloud e la sessione vengono prima di tutto il resto.
+
