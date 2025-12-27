@@ -1,143 +1,41 @@
-#include <Arduino.h>
 #include <WiFi.h>
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
+#include <WiFiClientSecure.h>
+#include <PubSubClient.h>
 
-// WiFi credentials
-const char* WIFI_SSID = "castelli_wifi";
-const char* WIFI_PASSWORD = "zID1M16YZdnZ";
+const char* ssid = "castelli_wifi";
+const char* password = "zID1M16YZdnZ";
 
-// BLE Server settings
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+const char* mqtt_server = "25b32eb558634f109fb70f673e5cd7ab.s1.eu.hivemq.cloud";
+const int mqtt_port = 8883;
+const char* mqtt_user = "admin";
+const char* mqtt_pass = "Scorely_test1";
 
-BLEServer* pServer = NULL;
-BLECharacteristic* pCharacteristic = NULL;
-bool deviceConnected = false;
-bool oldDeviceConnected = false;
-
-// BLE Server callbacks
-class MyServerCallbacks: public BLEServerCallbacks {
-    void onConnect(BLEServer* pServer) {
-        deviceConnected = true;
-        Serial.println("BLE Client connected");
-    }
-
-    void onDisconnect(BLEServer* pServer) {
-        deviceConnected = false;
-        Serial.println("BLE Client disconnected");
-    }
-};
-
-// BLE Characteristic callbacks
-class MyCallbacks: public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic *pCharacteristic) {
-        std::string value = pCharacteristic->getValue();
-        if (value.length() > 0) {
-            Serial.println("Received value:");
-            for (int i = 0; i < value.length(); i++) {
-                Serial.print(value[i]);
-            }
-            Serial.println();
-        }
-    }
-};
-
-void setupWiFi() {
-    Serial.println("Connecting to WiFi...");
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-        delay(500);
-        Serial.print(".");
-        attempts++;
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\nWiFi connected");
-        Serial.print("IP address: ");
-        Serial.println(WiFi.localIP());
-    } else {
-        Serial.println("\nWiFi connection failed");
-    }
-}
-
-void setupBLE() {
-    Serial.println("Initializing BLE...");
-
-    // Create the BLE Device
-    BLEDevice::init("ESP32-Scorely");
-
-    // Create the BLE Server
-    pServer = BLEDevice::createServer();
-    pServer->setCallbacks(new MyServerCallbacks());
-
-    // Create the BLE Service
-    BLEService *pService = pServer->createService(SERVICE_UUID);
-
-    // Create a BLE Characteristic
-    pCharacteristic = pService->createCharacteristic(
-        CHARACTERISTIC_UUID,
-        BLECharacteristic::PROPERTY_READ |
-        BLECharacteristic::PROPERTY_WRITE |
-        BLECharacteristic::PROPERTY_NOTIFY |
-        BLECharacteristic::PROPERTY_INDICATE
-    );
-
-    // Add callback for characteristic
-    pCharacteristic->setCallbacks(new MyCallbacks());
-
-    // Add BLE2902 descriptor for notifications
-    pCharacteristic->addDescriptor(new BLE2902());
-
-    // Start the service
-    pService->start();
-
-    // Start advertising
-    BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-    pAdvertising->addServiceUUID(SERVICE_UUID);
-    pAdvertising->setScanResponse(false);
-    pAdvertising->setMinPreferred(0x0);
-    BLEDevice::startAdvertising();
-
-    Serial.println("BLE device is now advertising");
-}
+WiFiClientSecure espClient;
+PubSubClient client(espClient);
 
 void setup() {
-    // Initialize serial communication
-    Serial.begin(115200);
-    delay(1000);
+//   Serial.begin(115200);
+//   WiFi.begin(ssid, password);
+//   while(WiFi.status() != WL_CONNECTED) delay(500);
 
-    Serial.println("\n=== ESP32 Scorely Device ===");
-    Serial.println("Starting initialization...");
-
-    // Setup WiFi
-    setupWiFi();
-
-    // Setup BLE
-    setupBLE();
-
-    Serial.println("Setup complete!");
+//   espClient.setInsecure(); // per TLS senza certificati
+//   client.setServer(mqtt_server, mqtt_port);
 }
 
 void loop() {
-    // Handle BLE disconnection/reconnection
-    if (!deviceConnected && oldDeviceConnected) {
-        delay(500);
-        pServer->startAdvertising();
-        Serial.println("Start advertising");
-        oldDeviceConnected = deviceConnected;
-    }
+//   if (!client.connected()) {
+//     while (!client.connected()) {
+//       Serial.println("Connessione al broker...");
+//       if(client.connect("ESP32Bracelet", mqtt_user, mqtt_pass)) {
+//         Serial.println("Connesso!");
+//       } else {
+//         delay(2000);
+//       }
+//     }
+//   }
+//   client.loop();
 
-    // Handle BLE connection
-    if (deviceConnected && !oldDeviceConnected) {
-        oldDeviceConnected = deviceConnected;
-    }
-
-    // Main loop code here
-    delay(100);
+//   // invio esempio
+//   client.publish("session/ABC123/state", "{\"team1\":1,\"team2\":0}");
+//   delay(5000);
 }
