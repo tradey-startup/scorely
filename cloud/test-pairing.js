@@ -3,7 +3,8 @@
  *
  * This script simulates opening a pairing session so bracelets can connect.
  *
- * Run with: node test-pairing.js
+ * Run with: node test-pairing.js [SESSION_ID]
+ * Example: node test-pairing.js ABC123
  * Make sure pairing-service.js is running first!
  */
 
@@ -18,7 +19,8 @@ const mqttConfig = {
   rejectUnauthorized: true,
 };
 
-const SESSION_ID = 'TEST01';
+// Get SESSION_ID from command line argument or use default
+const SESSION_ID = process.argv[2] || 'TEST01';
 
 console.log('🧪 Pairing Test Script\n');
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -27,6 +29,8 @@ console.log('1. Make sure pairing-service.js is running');
 console.log('2. This script will open pairing for 60 seconds');
 console.log('3. Press + and - together on your ESP32 bracelet');
 console.log('4. Watch the pairing happen!');
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log(`🎯 Testing Session: ${SESSION_ID}`);
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
 console.log(`📡 Connecting to MQTT broker...`);

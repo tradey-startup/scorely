@@ -30,6 +30,16 @@ const client = mqtt.connect(mqttConfig);
 // In-memory session state (in produzione: Redis o DB)
 const sessions = new Map();
 
+// Event deduplication cache (STEP 5)
+// Tracks recent events to prevent duplicates
+const eventCache = new Map(); // key: deviceId+timestamp, value: expiration time
+const EVENT_CACHE_TTL = 5000; // 5 seconds
+
+// Rate limiting per device (STEP 5)
+const deviceRateLimits = new Map(); // key: deviceId, value: {lastEvent, count}
+const RATE_LIMIT_WINDOW = 1000; // 1 second
+const MAX_EVENTS_PER_WINDOW = 10; // Max 10 events per second per device
+
 client.on('connect', () => {
   console.log('✅ Connected to MQTT broker');
 
@@ -51,6 +61,15 @@ client.on('connect', () => {
     }
   });
 
+  // STEP 5: Subscribe to pairing notifications
+  client.subscribe('session/+/pairing', (err) => {
+    if (err) {
+      console.error('❌ Failed to subscribe to pairing:', err);
+    } else {
+      console.log('📡 Subscribed to: session/+/pairing');
+    }
+  });
+
   console.log('🎯 Session service ready!\n');
 });
 
@@ -61,6 +80,8 @@ client.on('message', (topic, message) => {
     handleScoreEvent(topic, payload);
   } else if (topic.includes('/command')) {
     handleSessionCommand(topic, payload);
+  } else if (topic.includes('/pairing')) {
+    handlePairingNotification(topic, payload);
   }
 });
 
@@ -69,11 +90,59 @@ client.on('error', (error) => {
 });
 
 /**
+ * STEP 5: Handle pairing notifications from pairing service
+ */
+function handlePairingNotification(topic, payload) {
+  const sessionId = topic.split('/')[1];
+
+  if (payload.action === 'device_paired') {
+    const deviceInfo = payload.device;
+    console.log(`\n👥 New device paired to session ${sessionId}`);
+    console.log(`   Device: ${deviceInfo.deviceId}`);
+    console.log(`   Team: ${deviceInfo.team}`);
+
+    // Get or create session
+    let session = sessions.get(sessionId);
+    if (!session) {
+      console.log(`⚠️  Session not found, creating new session`);
+      session = {
+        sessionId: sessionId,
+        status: 'waiting',
+        score: {
+          team1: 0,
+          team2: 0,
+        },
+        pairedDevices: [],
+        startedAt: Date.now(),
+        lastUpdate: Date.now(),
+      };
+      sessions.set(sessionId, session);
+    }
+
+    // Add device if not already in list
+    if (!session.pairedDevices) {
+      session.pairedDevices = [];
+    }
+
+    const exists = session.pairedDevices.some(d => d.deviceId === deviceInfo.deviceId);
+    if (!exists) {
+      session.pairedDevices.push(deviceInfo);
+      console.log(`✅ Device added to session state`);
+      console.log(`   Total paired devices: ${session.pairedDevices.length}`);
+
+      // Publish updated state
+      publishStateSnapshot(sessionId);
+    } else {
+      console.log(`⚠️  Device already in session state`);
+    }
+  }
+}
+
+/**
  * Handle session commands (start, stop, reset, request_state)
  */
 function handleSessionCommand(topic, payload) {
   const sessionId = topic.split('/')[1];
-
   console.log(`\n📨 Command received for session: ${sessionId}`);
   console.log(`Action: ${payload.action}`);
 
@@ -167,6 +236,22 @@ function handleScoreEvent(topic, payload) {
   console.log(`Team: ${payload.team}`);
   console.log(`Device: ${payload.deviceId}`);
 
+  // STEP 5: Event deduplication check
+  if (isDuplicateEvent(payload)) {
+    console.log(`⚠️  DUPLICATE EVENT DETECTED - Ignoring`);
+    console.log(`   Device: ${payload.deviceId}`);
+    console.log(`   Timestamp: ${payload.timestamp}`);
+    return;
+  }
+
+  // STEP 5: Rate limiting check
+  if (isRateLimited(payload.deviceId)) {
+    console.log(`⚠️  RATE LIMIT EXCEEDED - Ignoring`);
+    console.log(`   Device: ${payload.deviceId}`);
+    console.log(`   Too many events in short time`);
+    return;
+  }
+
   // Get or create session
   let session = sessions.get(sessionId);
   if (!session) {
@@ -178,6 +263,7 @@ function handleScoreEvent(topic, payload) {
         team1: 0,
         team2: 0,
       },
+      pairedDevices: [],
       startedAt: Date.now(),
       lastUpdate: Date.now(),
     };
@@ -206,6 +292,72 @@ function handleScoreEvent(topic, payload) {
 }
 
 /**
+ * STEP 5: Check if event is a duplicate
+ * Events with the same deviceId + timestamp within TTL are considered duplicates
+ */
+function isDuplicateEvent(payload) {
+  const eventKey = `${payload.deviceId}_${payload.timestamp}`;
+  const now = Date.now();
+
+  // Clean expired entries
+  for (const [key, expiry] of eventCache.entries()) {
+    if (now > expiry) {
+      eventCache.delete(key);
+    }
+  }
+
+  // Check if event already exists
+  if (eventCache.has(eventKey)) {
+    return true;
+  }
+
+  // Add to cache
+  eventCache.set(eventKey, now + EVENT_CACHE_TTL);
+  return false;
+}
+
+/**
+ * STEP 5: Check if device is rate limited
+ * Prevents spam by limiting events per device per time window
+ */
+function isRateLimited(deviceId) {
+  const now = Date.now();
+  const deviceLimit = deviceRateLimits.get(deviceId);
+
+  if (!deviceLimit) {
+    // First event from this device
+    deviceRateLimits.set(deviceId, {
+      lastEvent: now,
+      count: 1,
+      windowStart: now,
+    });
+    return false;
+  }
+
+  // Check if we're in a new window
+  if (now - deviceLimit.windowStart > RATE_LIMIT_WINDOW) {
+    // Reset counter for new window
+    deviceRateLimits.set(deviceId, {
+      lastEvent: now,
+      count: 1,
+      windowStart: now,
+    });
+    return false;
+  }
+
+  // We're in the same window, increment counter
+  deviceLimit.count++;
+  deviceLimit.lastEvent = now;
+
+  // Check if limit exceeded
+  if (deviceLimit.count > MAX_EVENTS_PER_WINDOW) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Publish session state snapshot as RETAINED message
  * This ensures clients always receive the latest state on reconnection
  */
@@ -223,6 +375,7 @@ function publishStateSnapshot(sessionId) {
       team1: session.score.team1,
       team2: session.score.team2,
     },
+    pairedDevices: session.pairedDevices || [],
     lastUpdate: session.lastUpdate,
     timestamp: Date.now(),
   };

@@ -374,43 +374,82 @@ Garantire robustezza in scenari reali.
 
 ---
 
-## 👥 STEP 5 – Multi-braccialetto & Team
+## 👥 STEP 5 – Multi-braccialetto & Team ✅
 
 ### Obiettivo
 Gestire partite reali con più giocatori.
 
-### Attività
-- Assegnazione team durante pairing
-- Gestione più input simultanei
-- Protezione da duplicazioni
+### Attività ✅
+- ✅ Assegnazione team durante pairing (automatico, bilanciato)
+- ✅ Gestione più input simultanei (fino a 4 braccialetti)
+- ✅ Protezione da duplicazioni (event deduplication)
+- ✅ Rate limiting anti-spam (10 eventi/sec per device)
+- ✅ Tracking paired devices nel session state
 
 ### Regole
 - Un braccialetto = un team
-- Eventi idempotenti
+- Eventi idempotenti (dedup by deviceId+timestamp)
+- Team bilanciati automaticamente
 
-### Output atteso
-- 4 braccialetti funzionano insieme
+### Output atteso ✅
+- ✅ 4 braccialetti funzionano insieme
+- ✅ Eventi duplicati ignorati
+- ✅ Rate limiting previene spam
+- ✅ Snapshot include paired devices
+
+### Come testare
+```bash
+# Terminale 1
+cd cloud && node session-service.js
+
+# Terminale 2
+cd cloud && node pairing-service.js
+
+# Terminale 3
+cd cloud && node test-multi-bracelet.js
+```
+
+Vedi [STEP5-MULTI-BRACELET-GUIDE.md](STEP5-MULTI-BRACELET-GUIDE.md) per i dettagli completi.
 
 ---
 
-## 📱 STEP 6 – UX reale (flow completo)
+## 📱 STEP 6 – UX reale (flow completo) ✅
 
 ### Obiettivo
-Riprodurre **esattamente** l’esperienza dell’utente finale.
+Riprodurre **esattamente** l'esperienza dell'utente finale.
 
-### Attività
-- Creazione partita
-- QR code sessione
-- Pairing temporizzato
-- Start / End partita
+### Attività ✅
+- ✅ Creazione partita con wizard multi-step
+- ✅ QR code sessione (scansionabile da qualsiasi dispositivo)
+- ✅ Pairing temporizzato con countdown visuale (60s)
+- ✅ Start / End / Reset partita
+- ✅ Visualizzazione braccialetti collegati per team
+- ✅ Gestione stati (waiting/running/ended)
 
 ### Test reale
 - Tablet / iPad
 - 4 persone
 - Wi-Fi instabile
 
-### Output atteso
-- Esperienza fluida e intuitiva
+### Output atteso ✅
+- ✅ Esperienza fluida e intuitiva
+- ✅ Flow completo: Welcome → QR → Pairing → Ready → Match
+- ✅ Design responsive e touch-friendly
+- ✅ Feedback visivo in tempo reale
+
+### Come testare
+```bash
+# Avvia servizi
+cd cloud && node session-service.js &
+cd cloud && node pairing-service.js &
+
+# Avvia web app
+cd webapp/test && npm run dev
+
+# Apri http://localhost:5174/
+```
+
+Vedi [STEP6-UX-GUIDE.md](STEP6-UX-GUIDE.md) per i dettagli completi.
 
 ---
 

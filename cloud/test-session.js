@@ -8,7 +8,8 @@
  * 4. Monitor state snapshots
  * 5. Test reconnection scenarios
  *
- * Run with: node test-session.js
+ * Run with: node test-session.js [SESSION_ID]
+ * Example: node test-session.js ABC123
  * Make sure session-service.js and pairing-service.js are running!
  */
 
@@ -24,7 +25,8 @@ const mqttConfig = {
   rejectUnauthorized: true,
 };
 
-const SESSION_ID = 'TEST01';
+// Get SESSION_ID from command line argument or use default
+const SESSION_ID = process.argv[2] || 'TEST01';
 
 console.log('🧪 Complete Session Test Script (STEP 4)\n');
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -32,6 +34,8 @@ console.log('📋 Prerequisites:');
 console.log('1. session-service.js is running');
 console.log('2. pairing-service.js is running');
 console.log('3. ESP32 bracelet is ready');
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log(`🎯 Testing Session: ${SESSION_ID}`);
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
 console.log(`📡 Connecting to MQTT broker...`);
@@ -83,11 +87,13 @@ client.on('error', (error) => {
 });
 
 function handleStateUpdate(state) {
+  const UN_ERR = 'UNEXPECTED_ERROR';
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📸 STATE SNAPSHOT RECEIVED (RETAINED)');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`Session: ${state.sessionId}`);
   console.log(`Status: ${state.status}`);
+  console.log(JSON.stringify(state));
   console.log(`Score: Team 1: ${state.score.team1} - Team 2: ${state.score.team2}`);
   console.log(`Last Update: ${new Date(state.lastUpdate).toLocaleTimeString()}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');

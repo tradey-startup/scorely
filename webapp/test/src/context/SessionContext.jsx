@@ -11,7 +11,10 @@ export function SessionProvider({ children }) {
     team2: 0,
     status: 'waiting',
     timestamp: null,
+    pairingOpen: false,
+    pairingExpiresAt: null,
   });
+  const [pairedDevices, setPairedDevices] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
   const [mqttLogs, setMqttLogs] = useState([]);
@@ -59,12 +62,20 @@ export function SessionProvider({ children }) {
         // Handle state snapshot
         if (topic.includes('/state')) {
           setSessionState({
-            team1: payload.team1,
-            team2: payload.team2,
-            status: payload.status,
+            team1: payload.team1 || 0,
+            team2: payload.team2 || 0,
+            status: payload.status || 'waiting',
             timestamp: payload.timestamp,
+            pairingOpen: payload.pairingOpen || false,
+            pairingExpiresAt: payload.pairingExpiresAt || null,
           });
-          addLog(`📊 State updated: ${payload.team1}-${payload.team2} (${payload.status})`, 'success');
+
+          // Update paired devices if available
+          if (payload.pairedDevices) {
+            setPairedDevices(payload.pairedDevices);
+          }
+
+          addLog(`📊 State updated: ${payload.team1 || 0}-${payload.team2 || 0} (${payload.status})`, 'success');
         }
       } catch (error) {
         addLog(`❌ Failed to parse message: ${error.message}`, 'error');
@@ -188,13 +199,53 @@ export function SessionProvider({ children }) {
         team1: 0,
         team2: 0,
         status: 'waiting',
+        pairingOpen: false,
+        pairingExpiresAt: null,
+        pairedDevices: [],
       });
     }, 500);
+
+    return newSessionId;
+  };
+
+  // Open pairing window
+  const openPairing = (durationSeconds = 60) => {
+    if (!sessionId) {
+      addLog('❌ Cannot open pairing: no session', 'error');
+      return;
+    }
+
+    const expiresAt = Date.now() + (durationSeconds * 1000);
+
+    publishState({
+      team1: sessionState.team1,
+      team2: sessionState.team2,
+      status: sessionState.status,
+      pairingOpen: true,
+      pairingExpiresAt: expiresAt,
+      pairedDevices: pairedDevices,
+    });
+
+    addLog(`🔗 Pairing window opened for ${durationSeconds}s`, 'info');
+
+    // Auto-close pairing after duration
+    setTimeout(() => {
+      publishState({
+        team1: sessionState.team1,
+        team2: sessionState.team2,
+        status: sessionState.status,
+        pairingOpen: false,
+        pairingExpiresAt: null,
+        pairedDevices: pairedDevices,
+      });
+      addLog('🔒 Pairing window closed', 'info');
+    }, durationSeconds * 1000);
   };
 
   const value = {
     sessionId,
     sessionState,
+    pairedDevices,
     isConnected,
     connectionError,
     mqttLogs,
@@ -205,6 +256,7 @@ export function SessionProvider({ children }) {
     resetScores,
     incrementScore,
     publishState,
+    openPairing,
   };
 
   return (

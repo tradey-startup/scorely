@@ -49,7 +49,7 @@ unsigned long bothPressedStart = 0;
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
+  delay(5000);
 
   pinMode(BTN_PLUS_PIN, INPUT_PULLUP);
   pinMode(BTN_MINUS_PIN, INPUT_PULLUP);

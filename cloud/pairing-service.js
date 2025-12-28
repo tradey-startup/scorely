@@ -134,11 +134,13 @@ function handlePairingRequest(payload) {
   const team2Count = targetSession.pairedDevices.filter(d => d.team === 2).length;
   const assignedTeam = team1Count <= team2Count ? 1 : 2;
 
-  targetSession.pairedDevices.push({
+  const deviceInfo = {
     deviceId: deviceId,
     team: assignedTeam,
     pairedAt: Date.now(),
-  });
+  };
+
+  targetSession.pairedDevices.push(deviceInfo);
 
   console.log(`✅ PAIRING SUCCESSFUL`);
   console.log(`Session: ${targetSession.sessionId}`);
@@ -155,6 +157,9 @@ function handlePairingRequest(payload) {
   };
 
   sendPairingResponse(deviceId, response);
+
+  // STEP 5: Notify session service about new paired device
+  notifySessionServicePairing(targetSession.sessionId, deviceInfo);
 }
 
 function sendPairingResponse(deviceId, response) {
@@ -168,6 +173,26 @@ function sendPairingResponse(deviceId, response) {
       console.log(`📤 Response sent to ${deviceId}`);
       console.log(`Topic: ${topic}`);
       console.log(`Payload: ${payload}`);
+    }
+  });
+}
+
+/**
+ * STEP 5: Notify session service about newly paired device
+ * This keeps session state in sync with paired devices
+ */
+function notifySessionServicePairing(sessionId, deviceInfo) {
+  const topic = `session/${sessionId}/pairing`;
+  const payload = JSON.stringify({
+    action: 'device_paired',
+    device: deviceInfo,
+  });
+
+  client.publish(topic, payload, { qos: 1 }, (err) => {
+    if (err) {
+      console.error('❌ Failed to notify session service:', err);
+    } else {
+      console.log(`📤 Notified session service about pairing`);
     }
   });
 }
