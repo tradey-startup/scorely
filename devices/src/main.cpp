@@ -4,6 +4,19 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
+// --- Prototipi delle funzioni ---
+void connectWiFi();
+void connectMQTT();
+void mqttCallback(char* topic, byte* payload, unsigned int length);
+void handlePairingResponse(String jsonPayload);
+void savePairingToFlash();
+void loadPairingFromFlash();
+void handleButtons();
+void requestPairing();
+void sendScoreEvent(String action);
+void blinkLED(int times, int delayMs);
+// --------------------------------
+
 const char* ssid = "castelli_wifi";
 const char* password = "zID1M16YZdnZ";
 
