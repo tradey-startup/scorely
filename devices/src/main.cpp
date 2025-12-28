@@ -9,6 +9,7 @@ void connectWiFi();
 void connectMQTT();
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 void handlePairingResponse(String jsonPayload);
+void handleStateSnapshot(String jsonPayload);
 void savePairingToFlash();
 void loadPairingFromFlash();
 void handleButtons();
@@ -111,14 +112,34 @@ void connectWiFi() {
 }
 
 void connectMQTT() {
-  while (!client.connected()) {
-    Serial.print("Connecting to MQTT broker...");
+  int retryCount = 0;
+  const int MAX_RETRIES = 5;
+
+  while (!client.connected() && retryCount < MAX_RETRIES) {
+    Serial.print("Connecting to MQTT broker (attempt ");
+    Serial.print(retryCount + 1);
+    Serial.print("/");
+    Serial.print(MAX_RETRIES);
+    Serial.print(")...");
 
     if (client.connect(deviceId.c_str(), mqtt_user, mqtt_pass)) {
       Serial.println("connected!");
 
       if (isPaired) {
         Serial.println("Already paired, ready to send events");
+
+        // Subscribe to session state for reconnection recovery
+        String sessionId = sessionTopic.substring(sessionTopic.indexOf('/') + 1, sessionTopic.lastIndexOf('/'));
+        String stateTopic = "session/" + sessionId + "/state";
+        client.subscribe(stateTopic.c_str());
+        Serial.println("Subscribed to state updates: " + stateTopic);
+
+        // Request current state snapshot
+        String commandTopic = "session/" + sessionId + "/command";
+        String requestPayload = "{\"action\":\"request_state\"}";
+        client.publish(commandTopic.c_str(), requestPayload.c_str(), true);
+        Serial.println("Requested current state snapshot");
+
         blinkLED(2, 100);
       } else {
         Serial.println("Not paired yet, waiting for pairing request");
@@ -126,12 +147,26 @@ void connectMQTT() {
         client.subscribe(responseTopic.c_str());
         Serial.println("Subscribed to: " + responseTopic);
       }
+
+      retryCount = 0; // Reset retry count on success
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
-      Serial.println(" retrying in 2 seconds");
-      delay(2000);
+      Serial.print(" retrying in ");
+      int backoff = 2000 * (retryCount + 1); // Exponential backoff
+      Serial.print(backoff / 1000);
+      Serial.println(" seconds");
+
+      retryCount++;
+      delay(backoff);
     }
+  }
+
+  if (!client.connected()) {
+    Serial.println("❌ Failed to connect after maximum retries");
+    Serial.println("💡 Restarting ESP32 in 10 seconds...");
+    delay(10000);
+    ESP.restart();
   }
 }
 
@@ -148,7 +183,28 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   String topicStr = String(topic);
   if (topicStr.startsWith("pairing/response/")) {
     handlePairingResponse(message);
+  } else if (topicStr.endsWith("/state")) {
+    handleStateSnapshot(message);
   }
+}
+
+void handleStateSnapshot(String jsonPayload) {
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, jsonPayload);
+
+  if (error) {
+    Serial.print("JSON parse error: ");
+    Serial.println(error.c_str());
+    return;
+  }
+
+  Serial.println("\n📸 State snapshot received:");
+  Serial.print("   Team 1: ");
+  Serial.println(doc["score"]["team1"].as<int>());
+  Serial.print("   Team 2: ");
+  Serial.println(doc["score"]["team2"].as<int>());
+  Serial.print("   Status: ");
+  Serial.println(doc["status"].as<String>());
 }
 
 void handlePairingResponse(String jsonPayload) {

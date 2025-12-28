@@ -1,48 +1,80 @@
 /**
- * Test Script for Session Management
+ * Test Script for Complete Session Flow (STEP 4)
  *
- * This script tests the complete flow:
- * 1. Create a new session
- * 2. Connect to MQTT and listen for state updates
- * 3. Start the session
- * 4. Simulate score events
- * 5. Verify state snapshots are published correctly
+ * This script tests the complete session lifecycle with state persistence:
+ * 1. Start a session
+ * 2. Open pairing
+ * 3. Receive score events
+ * 4. Monitor state snapshots
+ * 5. Test reconnection scenarios
  *
  * Run with: node test-session.js
+ * Make sure session-service.js and pairing-service.js are running!
  */
 
 const mqtt = require('mqtt');
-require('dotenv').config({ path: './functions/.env' });
+const readline = require('readline');
 
-// MQTT Configuration
 const mqttConfig = {
-  host: process.env.MQTT_HOST,
-  port: parseInt(process.env.MQTT_PORT),
-  protocol: process.env.MQTT_PROTOCOL || 'mqtts',
-  username: process.env.MQTT_USERNAME,
-  password: process.env.MQTT_PASSWORD,
+  host: '25b32eb558634f109fb70f673e5cd7ab.s1.eu.hivemq.cloud',
+  port: 8883,
+  protocol: 'mqtts',
+  username: 'admin',
+  password: 'Scorely_test1',
   rejectUnauthorized: true,
 };
 
-console.log('🚀 Starting Session Test...\n');
-console.log('📡 MQTT Config:', {
-  host: mqttConfig.host,
-  port: mqttConfig.port,
-  protocol: mqttConfig.protocol,
-  username: mqttConfig.username,
-});
+const SESSION_ID = 'TEST01';
 
-// Connect to MQTT
-console.log('\n📡 Connecting to MQTT broker...');
+console.log('🧪 Complete Session Test Script (STEP 4)\n');
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('📋 Prerequisites:');
+console.log('1. session-service.js is running');
+console.log('2. pairing-service.js is running');
+console.log('3. ESP32 bracelet is ready');
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+console.log(`📡 Connecting to MQTT broker...`);
+
 const client = mqtt.connect(mqttConfig);
 
-let sessionId = null;
+let sessionStarted = false;
+let pairingOpened = false;
 
 client.on('connect', () => {
   console.log('✅ Connected to MQTT broker\n');
 
-  // Start the test flow
-  runTest();
+  // Subscribe to session state (RETAINED)
+  const stateTopic = `session/${SESSION_ID}/state`;
+  client.subscribe(stateTopic, (err) => {
+    if (!err) {
+      console.log(`📡 Subscribed to state: ${stateTopic}`);
+      console.log('   (Will receive RETAINED state on subscription)\n');
+    }
+  });
+
+  // Subscribe to session events
+  const eventTopic = `session/${SESSION_ID}/event`;
+  client.subscribe(eventTopic, (err) => {
+    if (!err) {
+      console.log(`📡 Subscribed to events: ${eventTopic}\n`);
+    }
+  });
+
+  // Show menu after subscriptions
+  setTimeout(() => {
+    showMenu();
+  }, 1000);
+});
+
+client.on('message', (topic, message) => {
+  const payload = JSON.parse(message.toString());
+
+  if (topic.endsWith('/state')) {
+    handleStateUpdate(payload);
+  } else if (topic.endsWith('/event')) {
+    handleScoreEvent(payload);
+  }
 });
 
 client.on('error', (error) => {
@@ -50,218 +82,205 @@ client.on('error', (error) => {
   process.exit(1);
 });
 
-client.on('message', (topic, message) => {
-  const payload = message.toString();
-  console.log('\n📨 Received MQTT message:');
-  console.log('  Topic:', topic);
-  console.log('  Payload:', payload);
+function handleStateUpdate(state) {
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📸 STATE SNAPSHOT RECEIVED (RETAINED)');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`Session: ${state.sessionId}`);
+  console.log(`Status: ${state.status}`);
+  console.log(`Score: Team 1: ${state.score.team1} - Team 2: ${state.score.team2}`);
+  console.log(`Last Update: ${new Date(state.lastUpdate).toLocaleTimeString()}`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+}
 
-  try {
-    const data = JSON.parse(payload);
-    console.log('  Parsed:', JSON.stringify(data, null, 2));
-  } catch (e) {
-    // Not JSON
+function handleScoreEvent(event) {
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('⚡ SCORE EVENT FROM BRACELET');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`Device: ${event.deviceId}`);
+  console.log(`Team: ${event.team}`);
+  console.log(`Action: ${event.action}`);
+  console.log(`Timestamp: ${new Date(event.timestamp).toLocaleTimeString()}`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+}
+
+function showMenu() {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📋 INTERACTIVE MENU');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('1 - Start session');
+  console.log('2 - Open pairing (60 seconds)');
+  console.log('3 - Stop session');
+  console.log('4 - Reset score');
+  console.log('5 - Request current state');
+  console.log('6 - Simulate disconnect/reconnect test');
+  console.log('q - Quit');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  console.log('👉 Choose an option (or press buttons on bracelet):\n');
+}
+
+// Interactive menu
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+  prompt: '',
+});
+
+rl.on('line', (input) => {
+  const choice = input.trim();
+
+  switch (choice) {
+    case '1':
+      startSession();
+      break;
+    case '2':
+      openPairing();
+      break;
+    case '3':
+      stopSession();
+      break;
+    case '4':
+      resetSession();
+      break;
+    case '5':
+      requestState();
+      break;
+    case '6':
+      testReconnection();
+      break;
+    case 'q':
+      console.log('\n👋 Closing connection...');
+      client.end();
+      process.exit(0);
+      break;
+    default:
+      if (choice !== '') {
+        console.log('❌ Invalid option\n');
+      }
   }
 });
 
-async function runTest() {
-  try {
-    // Test 1: Create Session
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('TEST 1: Create Session');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+function startSession() {
+  console.log('\n🟢 Starting session...');
 
-    sessionId = generateSessionId();
-    console.log(`📝 Generated Session ID: ${sessionId}`);
+  const command = {
+    action: 'start',
+  };
 
-    // Subscribe to session state topic
-    const stateTopic = `session/${sessionId}/state`;
-    console.log(`🔔 Subscribing to: ${stateTopic}`);
-
-    await new Promise((resolve, reject) => {
-      client.subscribe(stateTopic, { qos: 1 }, (error) => {
-        if (error) {
-          console.error('❌ Failed to subscribe:', error);
-          reject(error);
-        } else {
-          console.log('✅ Subscribed successfully');
-          resolve();
-        }
-      });
-    });
-
-    // Test 2: Publish Initial State
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('TEST 2: Publish Initial State Snapshot');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
-    const initialState = {
-      sessionId: sessionId,
-      team1: 0,
-      team2: 0,
-      status: 'waiting',
-      timestamp: Date.now(),
-    };
-
-    console.log('📤 Publishing state snapshot...');
-    console.log('  State:', JSON.stringify(initialState, null, 2));
-
-    await new Promise((resolve, reject) => {
-      client.publish(
-        stateTopic,
-        JSON.stringify(initialState),
-        { qos: 1, retain: true },
-        (error) => {
-          if (error) {
-            console.error('❌ Failed to publish:', error);
-            reject(error);
-          } else {
-            console.log('✅ State published successfully (retained)');
-            resolve();
-          }
-        }
-      );
-    });
-
-    // Wait a bit for the retained message to be processed
-    await sleep(2000);
-
-    // Test 3: Update State (Simulate Score Event)
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('TEST 3: Simulate Score Event');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
-    // First, change status to running
-    const runningState = {
-      ...initialState,
-      status: 'running',
-      timestamp: Date.now(),
-    };
-
-    console.log('📤 Publishing state: status = running');
-    await publishState(stateTopic, runningState);
-    await sleep(1000);
-
-    // Simulate score increment for team 1
-    const scoreState1 = {
-      ...runningState,
-      team1: 1,
-      timestamp: Date.now(),
-    };
-
-    console.log('📤 Publishing state: team1 scores (1-0)');
-    await publishState(stateTopic, scoreState1);
-    await sleep(1000);
-
-    // Simulate score increment for team 2
-    const scoreState2 = {
-      ...scoreState1,
-      team2: 1,
-      timestamp: Date.now(),
-    };
-
-    console.log('📤 Publishing state: team2 scores (1-1)');
-    await publishState(stateTopic, scoreState2);
-    await sleep(1000);
-
-    // More scores
-    const scoreState3 = {
-      ...scoreState2,
-      team1: 2,
-      timestamp: Date.now(),
-    };
-
-    console.log('📤 Publishing state: team1 scores (2-1)');
-    await publishState(stateTopic, scoreState3);
-    await sleep(1000);
-
-    // Test 4: Test Retained Message
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('TEST 4: Verify Retained Message');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
-    console.log('🔄 Disconnecting and reconnecting to test retained message...');
-
-    // Unsubscribe first
-    await new Promise((resolve) => {
-      client.unsubscribe(stateTopic, () => {
-        console.log('✅ Unsubscribed from topic');
-        resolve();
-      });
-    });
-
-    await sleep(1000);
-
-    // Resubscribe - should immediately receive the retained message
-    console.log('🔔 Re-subscribing to verify retained message...');
-    await new Promise((resolve, reject) => {
-      client.subscribe(stateTopic, { qos: 1 }, (error) => {
-        if (error) {
-          reject(error);
-        } else {
-          console.log('✅ Re-subscribed - waiting for retained message...');
-          resolve();
-        }
-      });
-    });
-
-    await sleep(2000);
-
-    // Test Complete
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('✅ ALL TESTS COMPLETED SUCCESSFULLY!');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
-    console.log('📋 Test Summary:');
-    console.log('  ✓ MQTT connection established');
-    console.log('  ✓ Session created with ID:', sessionId);
-    console.log('  ✓ State snapshots published with retain flag');
-    console.log('  ✓ Score updates processed correctly');
-    console.log('  ✓ Retained message verified on reconnection');
-    console.log('\n🎉 STEP 1 - Core del sistema: Sessione & Stato - COMPLETATO!\n');
-
-    // Cleanup
-    setTimeout(() => {
-      console.log('🔌 Disconnecting...');
-      client.end();
-      process.exit(0);
-    }, 2000);
-
-  } catch (error) {
-    console.error('\n❌ Test failed:', error);
-    client.end();
-    process.exit(1);
-  }
-}
-
-function publishState(topic, state) {
-  return new Promise((resolve, reject) => {
-    client.publish(
-      topic,
-      JSON.stringify(state),
-      { qos: 1, retain: true },
-      (error) => {
-        if (error) {
-          console.error('❌ Failed to publish:', error);
-          reject(error);
-        } else {
-          console.log('✅ State published');
-          resolve();
-        }
-      }
-    );
+  client.publish(`session/${SESSION_ID}/command`, JSON.stringify(command), { qos: 1 }, (err) => {
+    if (err) {
+      console.error('❌ Failed to start session:', err);
+    } else {
+      console.log('✅ Session start command sent');
+      console.log('💡 Wait for state snapshot...\n');
+      sessionStarted = true;
+    }
   });
 }
 
-function generateSessionId() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+function openPairing() {
+  if (!sessionStarted) {
+    console.log('⚠️  Please start the session first (option 1)\n');
+    return;
   }
-  return result;
+
+  console.log('\n🔓 Opening pairing for 60 seconds...');
+
+  const command = {
+    action: 'open_pairing',
+    duration: 60000,
+  };
+
+  client.publish(`session/${SESSION_ID}/command`, JSON.stringify(command), { qos: 1 }, (err) => {
+    if (err) {
+      console.error('❌ Failed to open pairing:', err);
+    } else {
+      console.log('✅ Pairing window opened!');
+      console.log('👉 Now press + and - together on your bracelet!\n');
+      pairingOpened = true;
+
+      setTimeout(() => {
+        console.log('⏱️  Pairing window closed after 60 seconds\n');
+        pairingOpened = false;
+      }, 60000);
+    }
+  });
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+function stopSession() {
+  console.log('\n🔴 Stopping session...');
+
+  const command = {
+    action: 'stop',
+  };
+
+  client.publish(`session/${SESSION_ID}/command`, JSON.stringify(command), { qos: 1 }, (err) => {
+    if (err) {
+      console.error('❌ Failed to stop session:', err);
+    } else {
+      console.log('✅ Session stop command sent\n');
+    }
+  });
+}
+
+function resetSession() {
+  console.log('\n🔄 Resetting session score...');
+
+  const command = {
+    action: 'reset',
+  };
+
+  client.publish(`session/${SESSION_ID}/command`, JSON.stringify(command), { qos: 1 }, (err) => {
+    if (err) {
+      console.error('❌ Failed to reset session:', err);
+    } else {
+      console.log('✅ Session reset command sent\n');
+    }
+  });
+}
+
+function requestState() {
+  console.log('\n📸 Requesting current state...');
+
+  const command = {
+    action: 'request_state',
+  };
+
+  client.publish(`session/${SESSION_ID}/command`, JSON.stringify(command), { qos: 1 }, (err) => {
+    if (err) {
+      console.error('❌ Failed to request state:', err);
+    } else {
+      console.log('✅ State request sent\n');
+    }
+  });
+}
+
+function testReconnection() {
+  console.log('\n🔄 RECONNECTION TEST');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('1. Disconnect from MQTT broker');
+  console.log('2. Wait 3 seconds');
+  console.log('3. Reconnect and request state');
+  console.log('4. Verify state is preserved\n');
+
+  console.log('🔌 Disconnecting...');
+  client.end(false, {}, () => {
+    console.log('✅ Disconnected\n');
+
+    setTimeout(() => {
+      console.log('🔌 Reconnecting...');
+      client.reconnect();
+
+      client.once('connect', () => {
+        console.log('✅ Reconnected!\n');
+
+        // Re-subscribe
+        client.subscribe(`session/${SESSION_ID}/state`);
+        client.subscribe(`session/${SESSION_ID}/event`);
+
+        console.log('📸 Receiving RETAINED state snapshot...');
+        console.log('💡 The state should be preserved from before disconnect!\n');
+      });
+    }, 3000);
+  });
 }
