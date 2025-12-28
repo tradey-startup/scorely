@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { SessionProvider, useSession } from './context/SessionContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import RoleSelector from './components/RoleSelector';
 import SessionWizard from './components/SessionWizard';
 import ActiveMatch from './components/ActiveMatch';
 import MqttLogs from './components/MqttLogs';
@@ -7,6 +9,7 @@ import MatchHistory from './components/MatchHistory';
 
 function AppContent() {
   const { sessionId, sessionState } = useSession();
+  const { auth, logout, hasPermission } = useAuth();
   const [currentView, setCurrentView] = useState('wizard');
   const [showLogs, setShowLogs] = useState(false);
   const [currentPage, setCurrentPage] = useState('match'); // 'match' or 'history'
@@ -32,6 +35,23 @@ function AppContent() {
     setCurrentView('wizard');
   };
 
+  // If not authenticated, show role selector
+  if (!auth.isAuthenticated) {
+    return (
+      <div className="min-h-screen p-6 md:p-12">
+        <header className="text-center mb-12">
+          <h1 className="text-6xl md:text-7xl font-black text-white mb-4">
+            SCORELY
+          </h1>
+          <p className="text-white/70 text-lg md:text-xl">
+            Sistema di Punteggio Sportivo IoT
+          </p>
+        </header>
+        <RoleSelector />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen p-6 md:p-12">
       {/* Header */}
@@ -42,6 +62,23 @@ function AppContent() {
         <p className="text-white/70 text-lg md:text-xl mb-6">
           Sistema di Punteggio Sportivo IoT
         </p>
+
+        {/* User Info & Logout */}
+        <div className="flex justify-center items-center gap-4 mb-6">
+          <div className="px-4 py-2 bg-white/20 backdrop-blur-lg rounded-full">
+            <span className="text-white font-semibold">
+              {auth.role === 'display' && '👁️ Display'}
+              {auth.role === 'controller' && '🎮 Controller'}
+              {auth.role === 'admin' && '👑 Admin'}
+            </span>
+          </div>
+          <button
+            onClick={logout}
+            className="px-4 py-2 bg-red-500/30 text-red-200 hover:bg-red-500/50 rounded-full font-semibold transition-all"
+          >
+            🚪 Logout
+          </button>
+        </div>
 
         {/* Navigation */}
         <div className="flex justify-center gap-4">
@@ -55,16 +92,18 @@ function AppContent() {
           >
             🎮 Partita Live
           </button>
-          <button
-            onClick={() => setCurrentPage('history')}
-            className={`px-6 py-3 font-bold rounded-2xl transition-all ${
-              currentPage === 'history'
-                ? 'bg-white text-purple-900 shadow-xl'
-                : 'bg-white/20 text-white hover:bg-white/30'
-            }`}
-          >
-            📊 Storico
-          </button>
+          {hasPermission('canViewHistory') && (
+            <button
+              onClick={() => setCurrentPage('history')}
+              className={`px-6 py-3 font-bold rounded-2xl transition-all ${
+                currentPage === 'history'
+                  ? 'bg-white text-purple-900 shadow-xl'
+                  : 'bg-white/20 text-white hover:bg-white/30'
+              }`}
+            >
+              📊 Storico
+            </button>
+          )}
         </div>
       </header>
 
@@ -112,9 +151,11 @@ function AppContent() {
 
 function App() {
   return (
-    <SessionProvider>
-      <AppContent />
-    </SessionProvider>
+    <AuthProvider>
+      <SessionProvider>
+        <AppContent />
+      </SessionProvider>
+    </AuthProvider>
   );
 }
 

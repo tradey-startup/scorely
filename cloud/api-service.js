@@ -5,11 +5,15 @@
  * and statistics. Used by the web app to display historical data.
  *
  * Endpoints:
- * - GET /api/matches - Get match history with filters
- * - GET /api/matches/:id - Get single match by ID
- * - GET /api/locations - Get all locations
- * - GET /api/stats/:locationId - Get location statistics
- * - GET /health - Health check
+ * - POST /auth/login - Authenticate and get JWT token
+ * - GET  /auth/verify - Verify token validity
+ * - GET  /health - Health check (public)
+ * - GET  /api/matches - Get match history (public)
+ * - GET  /api/matches/:id - Get single match (public)
+ * - GET  /api/locations - Get all locations (public)
+ * - GET  /api/stats/:locationId - Get location statistics (public)
+ * - POST /api/locations - Create location (ADMIN only)
+ * - DELETE /api/matches/:id - Delete match (ADMIN only)
  *
  * Run with: node api-service.js
  */
@@ -28,6 +32,10 @@ try {
   process.exit(1);
 }
 
+// Import auth service
+const auth = require('./auth-service');
+console.log('✅ Auth service loaded');
+
 const app = express();
 const PORT = process.env.API_PORT || 3001;
 
@@ -43,8 +51,88 @@ app.use((req, res, next) => {
 });
 
 /**
+ * POST /auth/login
+ * Authenticate and get JWT token
+ *
+ * Body:
+ * {
+ *   "role": "display|controller|admin",
+ *   "pin": "1234" (optional for display)
+ * }
+ */
+app.post('/auth/login', async (req, res) => {
+  try {
+    const { role, pin } = req.body;
+
+    if (!role) {
+      return res.status(400).json({
+        success: false,
+        error: 'Role is required'
+      });
+    }
+
+    const result = await auth.authenticate(role, pin);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        token: result.token,
+        role: result.role,
+        permissions: auth.getRolePermissions(result.role)
+      });
+    } else {
+      res.status(401).json({
+        success: false,
+        error: result.error
+      });
+    }
+  } catch (error) {
+    console.error('❌ Login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Authentication failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /auth/verify
+ * Verify if token is valid
+ */
+app.get('/auth/verify', (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.substring(7)
+    : req.query.token;
+
+  if (!token) {
+    return res.status(400).json({
+      success: false,
+      error: 'No token provided'
+    });
+  }
+
+  const decoded = auth.verifyToken(token);
+  if (decoded) {
+    res.json({
+      success: true,
+      valid: true,
+      role: decoded.role,
+      permissions: auth.getRolePermissions(decoded.role)
+    });
+  } else {
+    res.status(401).json({
+      success: false,
+      valid: false,
+      error: 'Invalid or expired token'
+    });
+  }
+});
+
+/**
  * GET /health
- * Health check endpoint
+ * Health check endpoint (public)
  */
 app.get('/health', (req, res) => {
   res.json({
@@ -204,9 +292,9 @@ app.get('/api/stats/:locationId', async (req, res) => {
 /**
  * DELETE /api/matches/:id
  * Delete a match by ID
- * (Optional - for admin cleanup)
+ * (Admin only)
  */
-app.delete('/api/matches/:id', async (req, res) => {
+app.delete('/api/matches/:id', auth.authMiddleware(auth.ROLES.ADMIN), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -232,7 +320,7 @@ app.delete('/api/matches/:id', async (req, res) => {
 /**
  * POST /api/locations
  * Create a new location
- * (Optional - for admin)
+ * (Admin only)
  *
  * Body:
  * {
@@ -241,7 +329,7 @@ app.delete('/api/matches/:id', async (req, res) => {
  *   "address": "Via Example 123"
  * }
  */
-app.post('/api/locations', async (req, res) => {
+app.post('/api/locations', auth.authMiddleware(auth.ROLES.ADMIN), async (req, res) => {
   try {
     const { id, name, address } = req.body;
 

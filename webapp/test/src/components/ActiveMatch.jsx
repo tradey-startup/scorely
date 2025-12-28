@@ -1,7 +1,11 @@
 import { useSession } from '../context/SessionContext';
+import { useAuth } from '../context/AuthContext';
 
 function ActiveMatch({ onEndMatch }) {
   const { sessionId, sessionState, startSession, endSession, resetScores, pairedDevices } = useSession();
+  const { hasPermission } = useAuth();
+
+  const canControl = hasPermission('canControl');
 
   const handleStart = () => {
     startSession();
@@ -96,30 +100,42 @@ function ActiveMatch({ onEndMatch }) {
       </div>
 
       {/* Controls */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {isWaiting && (
-          <button
-            onClick={handleStart}
-            className="col-span-full py-6 px-8 bg-linear-to-r from-green-600 to-emerald-600 text-white text-xl font-bold rounded-2xl hover:scale-105 transition-transform shadow-2xl"
-          >
-            ▶️ Inizia Partita
-          </button>
-        )}
+      {!canControl && (
+        <div className="text-center py-4 bg-yellow-500/20 border-2 border-yellow-500 rounded-2xl">
+          <p className="text-yellow-300 font-semibold">
+            👁️ Modalità Display - Solo Visualizzazione
+          </p>
+          <p className="text-white/60 text-sm mt-1">
+            Effettua il login come Controller o Admin per gestire la partita
+          </p>
+        </div>
+      )}
 
-        {isRunning && (
-          <>
+      {canControl && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {isWaiting && (
             <button
-              onClick={handleEnd}
-              className="py-4 px-6 bg-red-600 text-white text-lg font-bold rounded-2xl hover:scale-105 transition-transform shadow-xl"
+              onClick={handleStart}
+              className="col-span-full py-6 px-8 bg-linear-to-r from-green-600 to-emerald-600 text-white text-xl font-bold rounded-2xl hover:scale-105 transition-transform shadow-2xl"
             >
-              ⏹️ Termina
+              ▶️ Inizia Partita
             </button>
-            <button
-              onClick={handleReset}
-              className="py-4 px-6 bg-orange-600 text-white text-lg font-bold rounded-2xl hover:scale-105 transition-transform shadow-xl"
-            >
-              🔄 Reset
-            </button>
+          )}
+
+          {isRunning && (
+            <>
+              <button
+                onClick={handleEnd}
+                className="py-4 px-6 bg-red-600 text-white text-lg font-bold rounded-2xl hover:scale-105 transition-transform shadow-xl"
+              >
+                ⏹️ Termina
+              </button>
+              <button
+                onClick={handleReset}
+                className="py-4 px-6 bg-orange-600 text-white text-lg font-bold rounded-2xl hover:scale-105 transition-transform shadow-xl"
+              >
+                🔄 Reset
+              </button>
             <div className="flex items-center justify-center bg-green-600/20 border-2 border-green-500 rounded-2xl px-6 py-4">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
@@ -129,14 +145,14 @@ function ActiveMatch({ onEndMatch }) {
           </>
         )}
 
-        {isEnded && (
-          <>
-            <button
-              onClick={handleReset}
-              className="py-4 px-6 bg-blue-600 text-white text-lg font-bold rounded-2xl hover:scale-105 transition-transform shadow-xl"
-            >
-              🔄 Nuova Partita
-            </button>
+          {isEnded && (
+            <>
+              <button
+                onClick={handleReset}
+                className="py-4 px-6 bg-blue-600 text-white text-lg font-bold rounded-2xl hover:scale-105 transition-transform shadow-xl"
+              >
+                🔄 Nuova Partita
+              </button>
             <div className="col-span-2 flex items-center justify-center bg-red-600/20 border-2 border-red-500 rounded-2xl px-6 py-4">
               <div className="text-center">
                 <p className="text-red-400 font-semibold text-lg">Partita Terminata</p>
@@ -146,9 +162,10 @@ function ActiveMatch({ onEndMatch }) {
                 </p>
               </div>
             </div>
-          </>
-        )}
-      </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Live Events Indicator */}
       {isRunning && (
