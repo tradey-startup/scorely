@@ -2,17 +2,30 @@
  * Session Service - State Management & Persistence
  *
  * This service is the core of STEP 4: Stato persistente & riconnessioni
+ * Enhanced with STEP 7: Database persistence for completed matches
  *
  * Responsibilities:
  * 1. Maintains session state in memory
  * 2. Publishes state snapshots as retained messages
  * 3. Handles score events and updates state
  * 4. Ensures no score loss on disconnections
+ * 5. Saves completed matches to Firestore (STEP 7)
  *
  * Run with: node session-service.js
  */
 
 const mqtt = require('mqtt');
+
+// STEP 7: Import database service
+let database;
+try {
+  database = require('./database-service');
+  console.log('✅ Database service loaded (match persistence enabled)');
+} catch (error) {
+  console.log('⚠️  Database service not available (matches will not be saved)');
+  console.log('   To enable: Make sure Firebase is configured');
+  database = null;
+}
 
 const mqttConfig = {
   host: '25b32eb558634f109fb70f673e5cd7ab.s1.eu.hivemq.cloud',
@@ -148,9 +161,10 @@ function handleSessionCommand(topic, payload) {
 
   switch (payload.action) {
     case 'start':
-      startSession(sessionId);
+      startSession(sessionId, payload.locationId);
       break;
     case 'stop':
+    case 'end': // Support both 'stop' and 'end'
       stopSession(sessionId);
       break;
     case 'reset':
@@ -166,17 +180,22 @@ function handleSessionCommand(topic, payload) {
 
 /**
  * Start a new session
+ * STEP 7: Added locationId support
  */
-function startSession(sessionId) {
+function startSession(sessionId, locationId = 'default') {
   console.log(`\n🟢 Starting session: ${sessionId}`);
+  console.log(`   Location: ${locationId}`);
 
   sessions.set(sessionId, {
     sessionId: sessionId,
+    locationId: locationId, // STEP 7: Store location
     status: 'running',
     score: {
       team1: 0,
       team2: 0,
     },
+    pairedDevices: [],
+    totalEvents: 0,
     startedAt: Date.now(),
     lastUpdate: Date.now(),
   });
@@ -187,8 +206,9 @@ function startSession(sessionId) {
 
 /**
  * Stop a session
+ * STEP 7: Also saves the match to database
  */
-function stopSession(sessionId) {
+async function stopSession(sessionId) {
   const session = sessions.get(sessionId);
   if (!session) {
     console.log(`⚠️  Session ${sessionId} not found`);
@@ -201,6 +221,36 @@ function stopSession(sessionId) {
 
   publishStateSnapshot(sessionId);
   console.log(`✅ Session ${sessionId} stopped`);
+
+  // STEP 7: Save match to database if available
+  if (database && session.startedAt && session.endedAt) {
+    try {
+      console.log('\n💾 Saving match to database...');
+
+      const matchData = {
+        sessionId: sessionId,
+        locationId: session.locationId || 'default',
+        startTime: session.startedAt,
+        endTime: session.endedAt,
+        finalScore: {
+          team1: session.score.team1,
+          team2: session.score.team2
+        },
+        pairedDevices: session.pairedDevices || [],
+        totalEvents: session.totalEvents || 0
+      };
+
+      const matchId = await database.saveMatch(matchData);
+      console.log(`✅ Match saved to database: ${matchId}`);
+      console.log(`   Score: ${matchData.finalScore.team1}-${matchData.finalScore.team2}`);
+      console.log(`   Duration: ${Math.floor((session.endedAt - session.startedAt) / 1000)}s`);
+    } catch (error) {
+      console.error('❌ Failed to save match to database:', error.message);
+      console.error('   Match data will not be persisted');
+    }
+  } else if (!database) {
+    console.log('⚠️  Database not available - match not saved');
+  }
 }
 
 /**
@@ -264,10 +314,16 @@ function handleScoreEvent(topic, payload) {
         team2: 0,
       },
       pairedDevices: [],
+      totalEvents: 0, // STEP 7: Track total events for database
       startedAt: Date.now(),
       lastUpdate: Date.now(),
     };
     sessions.set(sessionId, session);
+  }
+
+  // Initialize totalEvents if not present (for existing sessions)
+  if (!session.totalEvents) {
+    session.totalEvents = 0;
   }
 
   // Update score
@@ -282,6 +338,7 @@ function handleScoreEvent(topic, payload) {
 
   const newScore = session.score[teamKey];
   session.lastUpdate = Date.now();
+  session.totalEvents++; // STEP 7: Increment event counter
 
   console.log(`\n📊 Score updated:`);
   console.log(`   Team ${payload.team}: ${oldScore} → ${newScore}`);
